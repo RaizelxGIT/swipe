@@ -88,3 +88,5 @@ th{color:var(--mut);font-weight:500}
 @media (max-width:820px){.split{grid-template-columns:1fr;gap:28px}.stats{grid-template-columns:1fr 1fr 1fr}}
 @media (max-width:560px){.top{flex-direction:column;align-items:flex-start;gap:10px;padding:16px}nav{gap:14px;flex-wrap:wrap}main{padding:8px 16px 64px}.two{grid-template-columns:1fr}.stat b{font-size:1.2rem}}
 @media (prefers-reduced-motion:reduce){*{transition:none!important}}
+
+.sharebox{margin:20px 0}.sharebox .inline{display:flex;gap:8px}.sharebox .inline input{flex:1;min-width:0}.sharebtns{display:flex;gap:8px;flex-wrap:wrap}

@@ -16,7 +16,12 @@ const DEMO = process.env.DEMO_PAYMENTS === '1'; // offline fallback for demos on
 if (MODE === 'LIVE') {
   // Live money: refuse to start with sandbox credentials or any verification bypass.
   if (!process.env.ISW_MERCHANT_CODE || !process.env.ISW_PAY_ITEM_ID) { console.error('ISW_MODE=LIVE needs ISW_MERCHANT_CODE and ISW_PAY_ITEM_ID in .env (your own live credentials).'); process.exit(1); }
-  if (SKIP_VERIFY || DEMO) { console.error('SKIP_VERIFY and DEMO_PAYMENTS must be off when ISW_MODE=LIVE.'); process.exit(1); }
+  if (SKIP_VERIFY || DEMO) {
+    console.error('Live mode refuses to start because these are switched on: ' + [SKIP_VERIFY && 'SKIP_VERIFY=1', DEMO && 'DEMO_PAYMENTS=1'].filter(Boolean).join(', '));
+    console.error('They are NOT coming from this code. They are set in your terminal session, your OS environment variables, your host dashboard, or a .env file.');
+    console.error('Fix: close this terminal and open a new one, or unset them (PowerShell: Remove-Item Env:SKIP_VERIFY, Env:DEMO_PAYMENTS | cmd: set SKIP_VERIFY= & set DEMO_PAYMENTS= | mac/linux: unset SKIP_VERIFY DEMO_PAYMENTS).');
+    process.exit(1);
+  }
 }
 // Interswitch docs/community guides list more than one sandbox hostname, so we try each in turn.
 const CHECKOUT_URLS = process.env.ISW_CHECKOUT_URL ? [process.env.ISW_CHECKOUT_URL]
@@ -140,8 +145,30 @@ async function verifyWithInterswitch(order) {
 
 /* ---------- app ---------- */
 const app = express();
+app.set('trust proxy', 1); // so req.protocol is https behind Render/Railway/etc.
 app.use(express.json({ limit: '100kb' }));
 app.use(express.static(path.join(__dirname, 'public')));
+
+// Shareable event link: /e/<id>. Serves the app shell with Open Graph tags so WhatsApp, X, iMessage etc. show a rich preview;
+// the browser then jumps to the normal event page (#/event/<id>).
+const escHtml = v => String(v ?? '').replace(/[&<>"']/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
+app.get('/e/:id', h(async (req, res) => {
+  const e = await col.events.findOne({ id: String(req.params.id) }, NO_ID);
+  const origin = `${req.protocol}://${req.get('host')}`;
+  let html = await require('fs').promises.readFile(path.join(__dirname, 'public', 'index.html'), 'utf8');
+  let head = '<base href="/">';
+  if (e) {
+    const when = new Date(e.date).toLocaleString('en-NG', { weekday: 'short', day: 'numeric', month: 'short', year: 'numeric', hour: 'numeric', minute: '2-digit', timeZone: 'Africa/Lagos' });
+    const price = e.price > 0 ? '₦' + Number(e.price).toLocaleString('en-NG') : 'Free';
+    const desc = `${when} · ${e.venue} · ${price}` + (e.description ? ' — ' + e.description.replace(/\s+/g, ' ').slice(0, 120) : '');
+    head += `<meta property="og:type" content="website"><meta property="og:site_name" content="Swipe">` +
+      `<meta property="og:title" content="${escHtml(e.title)}"><meta property="og:description" content="${escHtml(desc)}">` +
+      `<meta property="og:url" content="${escHtml(origin + '/e/' + e.id)}"><meta name="twitter:card" content="summary">` +
+      `<meta name="description" content="${escHtml(desc)}">`;
+    html = html.replace(/<title>.*?<\/title>/, `<title>${escHtml(e.title)} — Swipe</title>`);
+  }
+  res.status(e ? 200 : 404).type('html').send(html.replace('<head>', '<head>' + head));
+}));
 
 app.get('/api/config', (req, res) => res.json({ merchantCode: MERCHANT, payItemId: PAY_ITEM, mode: MODE, checkoutUrls: CHECKOUT_URLS, demo: DEMO }));
 

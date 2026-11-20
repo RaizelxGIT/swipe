@@ -91,6 +91,7 @@ async function eventPage(id) {
           <div><dt>Hosted by</dt><dd>${esc(e.hostName)}</dd></div>
         </dl>
         ${e.description ? `<p class="desc">${esc(e.description)}</p>` : ''}
+        <button class="btn ghost small" type="button" data-share="${esc(e.id)}" data-title="${esc(e.title)}">Share this event</button>
       </div>
       ${max < 1 ? '<div class="panel"><h2>Sold out</h2><p class="note">All tickets for this event have been claimed.</p></div>' : `
       <form id="buy" class="panel">
@@ -251,6 +252,16 @@ async function hostPage(id, key) {
     <a class="back" href="#/hosting">‹ Hosting</a>
     <h1 style="font-size:2rem">${esc(d.event.title)}</h1>
     <div class="meta" style="margin-top:8px"><span>${esc(fmtDate(d.event.date))} · ${esc(d.event.venue)}</span><span><a href="#/event/${esc(id)}">Public event page</a></span></div>
+    <div class="panel sharebox">
+      <h2>Share your ticket link</h2>
+      <p class="note">Anyone with this link can open your event and buy tickets. Post it on WhatsApp, Instagram, X or send it in a DM.</p>
+      <div class="inline"><input id="shareUrl" readonly value="${esc(location.origin + '/e/' + id)}" aria-label="Ticket link"><button class="btn" type="button" data-copy="${esc(location.origin + '/e/' + id)}">Copy link</button></div>
+      <div class="sharebtns">
+        <button class="btn ghost small" type="button" data-share="${esc(id)}" data-title="${esc(d.event.title)}">Share…</button>
+        <a class="btn ghost small" target="_blank" rel="noopener" href="https://wa.me/?text=${encodeURIComponent(d.event.title + ' — get your ticket: ' + location.origin + '/e/' + id)}">WhatsApp</a>
+        <a class="btn ghost small" target="_blank" rel="noopener" href="https://twitter.com/intent/tweet?text=${encodeURIComponent(d.event.title)}&url=${encodeURIComponent(location.origin + '/e/' + id)}">X</a>
+      </div>
+    </div>
     <div class="stats" id="stats"></div>
     <div class="split" style="grid-template-columns:360px 1fr">
       <div class="panel">
@@ -304,5 +315,28 @@ async function hostPage(id, key) {
     }, 250);
   };
 }
+
+/* ---------- sharing ---------- */
+async function copyText(text) {
+  try { await navigator.clipboard.writeText(text); return true; } catch {}
+  const t = document.createElement('textarea'); t.value = text; t.style.position = 'fixed'; t.style.opacity = '0';
+  document.body.appendChild(t); t.select();
+  let ok = false; try { ok = document.execCommand('copy'); } catch {}
+  t.remove(); return ok;
+}
+document.addEventListener('click', async ev => {
+  const el = ev.target.closest('[data-copy],[data-share]');
+  if (!el) return;
+  if (el.dataset.copy) { toast(await copyText(el.dataset.copy) ? 'Link copied' : 'Press and hold the link to copy it'); return; }
+  const url = location.origin + '/e/' + el.dataset.share, title = el.dataset.title || 'Event tickets';
+  if (navigator.share) { try { await navigator.share({ title, text: title + ' — get your ticket', url }); } catch {} return; }
+  toast(await copyText(url) ? 'Link copied' : url);
+});
+
+/* Shared links look like /e/<id>: hop to the normal event page */
+(() => {
+  const m = location.pathname.match(/^\/e\/([^/]+)\/?$/);
+  if (m) history.replaceState(null, '', '/#/event/' + m[1]);
+})();
 
 route();
